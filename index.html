@@ -1,0 +1,1765 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="theme-color" content="#0f172a" />
+  <title>VibeSight AI - Live Camera Studio</title>
+
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+
+  <style>
+    html,
+    body {
+      margin: 0;
+      min-height: 100%;
+      background: #020617;
+      color: #e2e8f0;
+      font-family: Inter, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI",
+        sans-serif;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    video,
+    img {
+      display: block;
+      max-width: 100%;
+    }
+
+    button:disabled {
+      cursor: not-allowed;
+      opacity: 0.5;
+    }
+
+    .glass {
+      background: rgba(15, 23, 42, 0.82);
+      backdrop-filter: blur(16px);
+      border: 1px solid rgba(148, 163, 184, 0.15);
+    }
+
+    .camera-container {
+      position: relative;
+      overflow: hidden;
+      background: #000;
+      aspect-ratio: 16 / 9;
+    }
+
+    .camera-container video,
+    .camera-container img {
+      width: 100%;
+      height: 100%;
+      object-fit: contain;
+      background: #000;
+    }
+
+    .recording-dot {
+      width: 10px;
+      height: 10px;
+      border-radius: 999px;
+      background: #ef4444;
+      animation: pulse 1s infinite;
+    }
+
+    @keyframes pulse {
+      0%,
+      100% {
+        opacity: 1;
+      }
+
+      50% {
+        opacity: 0.35;
+      }
+    }
+
+    .status-dot {
+      width: 9px;
+      height: 9px;
+      border-radius: 999px;
+      display: inline-block;
+    }
+
+    .markdown-content h1,
+    .markdown-content h2,
+    .markdown-content h3 {
+      font-weight: 700;
+      margin-top: 1rem;
+      margin-bottom: 0.5rem;
+    }
+
+    .markdown-content p {
+      margin: 0.5rem 0;
+    }
+
+    .markdown-content ul,
+    .markdown-content ol {
+      padding-left: 1.25rem;
+      margin: 0.5rem 0;
+    }
+
+    .markdown-content code {
+      background: rgba(148, 163, 184, 0.15);
+      padding: 0.1rem 0.3rem;
+      border-radius: 0.25rem;
+    }
+
+    .markdown-content pre {
+      overflow-x: auto;
+      background: #020617;
+      padding: 1rem;
+      border-radius: 0.5rem;
+      margin: 0.75rem 0;
+    }
+
+    .markdown-content strong {
+      color: #fff;
+    }
+
+    .hidden-file-input {
+      display: none;
+    }
+  </style>
+</head>
+
+<body>
+  <main class="min-h-screen">
+    <!-- Header -->
+    <header class="border-b border-slate-800 bg-slate-950/90">
+      <div
+        class="mx-auto flex max-w-7xl flex-wrap items-center justify-between gap-4 px-4 py-4"
+      >
+        <div>
+          <div class="flex items-center gap-3">
+            <div
+              class="flex h-10 w-10 items-center justify-center rounded-xl bg-cyan-500/15 text-xl"
+            >
+              👁️
+            </div>
+
+            <div>
+              <h1 class="text-xl font-bold text-white">
+                VibeSight AI
+              </h1>
+
+              <p class="text-xs text-slate-400">
+                Live Camera Studio
+              </p>
+            </div>
+          </div>
+        </div>
+
+        <div class="flex flex-wrap items-center gap-3 text-sm">
+          <div
+            id="camera-status"
+            class="flex items-center gap-2 rounded-full bg-slate-800 px-3 py-2"
+          >
+            <span id="camera-status-dot" class="status-dot bg-slate-500"></span>
+            <span id="camera-status-text">Camera not started</span>
+          </div>
+
+          <button
+            id="api-key-button"
+            type="button"
+            class="rounded-lg border border-slate-700 bg-slate-900 px-4 py-2 text-slate-200 transition hover:bg-slate-800"
+          >
+            🔑 API Key
+          </button>
+        </div>
+      </div>
+    </header>
+
+    <div class="mx-auto max-w-7xl px-4 py-6">
+      <!-- Security / browser warning -->
+      <div
+        id="browser-warning"
+        class="mb-6 hidden rounded-xl border border-amber-500/30 bg-amber-500/10 p-4 text-sm text-amber-100"
+      >
+        <div class="flex gap-3">
+          <div class="text-xl">⚠️</div>
+
+          <div>
+            <p class="font-semibold">Camera access may be blocked</p>
+
+            <p id="browser-warning-text" class="mt-1 text-amber-200/80">
+              Camera access requires a secure browser context.
+            </p>
+          </div>
+        </div>
+      </div>
+
+      <div class="grid gap-6 lg:grid-cols-[minmax(0,1.4fr)_minmax(320px,0.6fr)]">
+        <!-- Camera panel -->
+        <section class="glass overflow-hidden rounded-2xl">
+          <div class="border-b border-slate-800 px-5 py-4">
+            <div class="flex flex-wrap items-center justify-between gap-3">
+              <div>
+                <h2 class="font-semibold text-white">
+                  Camera
+                </h2>
+
+                <p class="text-sm text-slate-400">
+                  Capture or analyze what your camera sees.
+                </p>
+              </div>
+
+              <div
+                id="recording-indicator"
+                class="hidden items-center gap-2 rounded-full bg-red-500/10 px-3 py-1.5 text-xs text-red-300"
+              >
+                <span class="recording-dot"></span>
+                Recording
+              </div>
+            </div>
+          </div>
+
+          <div class="p-4">
+            <div class="camera-container rounded-xl">
+              <video
+                id="webcam-view"
+                autoplay
+                playsinline
+                muted
+                aria-label="Live camera preview"
+              ></video>
+
+              <img
+                id="image-preview"
+                class="hidden"
+                alt="Uploaded image preview"
+              />
+
+              <div
+                id="camera-placeholder"
+                class="absolute inset-0 flex items-center justify-center bg-slate-950"
+              >
+                <div class="max-w-md px-6 text-center">
+                  <div class="mb-4 text-5xl">📷</div>
+
+                  <h3 class="text-lg font-semibold text-white">
+                    Camera is not active
+                  </h3>
+
+                  <p class="mt-2 text-sm text-slate-400">
+                    Click <strong>Start Camera</strong> to request camera access.
+                  </p>
+                </div>
+              </div>
+
+              <div
+                id="recording-overlay"
+                class="absolute left-4 top-4 hidden items-center gap-2 rounded-full bg-black/60 px-3 py-2 text-sm text-white"
+              >
+                <span class="recording-dot"></span>
+                <span id="recording-time">00:00</span>
+              </div>
+            </div>
+
+            <!-- Controls -->
+            <div class="mt-4 flex flex-wrap gap-2">
+              <button
+                id="start-camera"
+                type="button"
+                class="rounded-lg bg-cyan-500 px-4 py-2.5 font-semibold text-slate-950 transition hover:bg-cyan-400"
+              >
+                ▶ Start Camera
+              </button>
+
+              <button
+                id="stop-camera"
+                type="button"
+                disabled
+                class="rounded-lg border border-slate-700 bg-slate-900 px-4 py-2.5 text-slate-200 transition hover:bg-slate-800"
+              >
+                ■ Stop
+              </button>
+
+              <button
+                id="snapshot-button"
+                type="button"
+                disabled
+                class="rounded-lg border border-slate-700 bg-slate-900 px-4 py-2.5 text-slate-200 transition hover:bg-slate-800"
+              >
+                📸 Snapshot
+              </button>
+
+              <button
+                id="record-button"
+                type="button"
+                disabled
+                class="rounded-lg border border-slate-700 bg-slate-900 px-4 py-2.5 text-slate-200 transition hover:bg-slate-800"
+              >
+                ⏺ Record
+              </button>
+
+              <label
+                for="image-upload"
+                class="cursor-pointer rounded-lg border border-slate-700 bg-slate-900 px-4 py-2.5 text-slate-200 transition hover:bg-slate-800"
+              >
+                🖼 Upload Image
+              </label>
+
+              <input
+                id="image-upload"
+                class="hidden-file-input"
+                type="file"
+                accept="image/*"
+              />
+            </div>
+
+            <!-- Camera error -->
+            <div
+              id="camera-error"
+              class="mt-4 hidden rounded-xl border border-red-500/30 bg-red-500/10 p-4 text-sm text-red-200"
+            >
+              <p id="camera-error-title" class="font-semibold">
+                Camera error
+              </p>
+
+              <p id="camera-error-message" class="mt-1"></p>
+
+              <div
+                id="camera-troubleshooting"
+                class="mt-3 rounded-lg bg-black/20 p-3 text-xs text-red-100/80"
+              >
+                <p class="font-semibold">Try these steps:</p>
+
+                <ol class="mt-2 list-decimal space-y-1 pl-5">
+                  <li>Make sure this page is opened using HTTPS or localhost.</li>
+                  <li>Allow camera access when your browser asks.</li>
+                  <li>Check macOS → System Settings → Privacy & Security → Camera.</li>
+                  <li>Close apps such as Zoom, Teams, FaceTime, Photo Booth, or OBS.</li>
+                  <li>Refresh the browser after changing camera permissions.</li>
+                  <li>If using a preview environment, open the app in a new browser window.</li>
+                </ol>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <!-- AI panel -->
+        <aside class="space-y-6">
+          <section class="glass rounded-2xl p-5">
+            <div class="flex items-start justify-between gap-3">
+              <div>
+                <h2 class="font-semibold text-white">
+                  AI Vision
+                </h2>
+
+                <p class="mt-1 text-sm text-slate-400">
+                  Analyze the current image with Gemini.
+                </p>
+              </div>
+
+              <span
+                id="api-status"
+                class="rounded-full bg-slate-800 px-2.5 py-1 text-xs text-slate-400"
+              >
+                No API key
+              </span>
+            </div>
+
+            <label
+              for="prompt-input"
+              class="mt-5 block text-sm font-medium text-slate-300"
+            >
+              Analysis prompt
+            </label>
+
+            <textarea
+              id="prompt-input"
+              rows="5"
+              class="mt-2 w-full resize-y rounded-xl border border-slate-700 bg-slate-950 p-3 text-sm text-slate-100 outline-none placeholder:text-slate-600 focus:border-cyan-500"
+              placeholder="Describe what you see in this image. Identify important objects, people, text, colors, or anything unusual."
+            >Analyze this image. Describe what you see, identify the important objects or subjects, and provide useful observations.</textarea>
+
+            <button
+              id="analyze-button"
+              type="button"
+              disabled
+              class="mt-3 w-full rounded-lg bg-cyan-500 px-4 py-3 font-semibold text-slate-950 transition hover:bg-cyan-400"
+            >
+              ✨ Analyze with AI
+            </button>
+          </section>
+
+          <section class="glass rounded-2xl p-5">
+            <div class="flex items-center justify-between gap-3">
+              <h2 class="font-semibold text-white">
+                AI Result
+              </h2>
+
+              <button
+                id="clear-result"
+                type="button"
+                class="text-xs text-slate-400 hover:text-white"
+              >
+                Clear
+              </button>
+            </div>
+
+            <div
+              id="ai-result"
+              class="markdown-content mt-4 min-h-[180px] rounded-xl bg-slate-950 p-4 text-sm leading-6 text-slate-300"
+              aria-live="polite"
+            >
+              <p class="text-slate-500">
+                AI analysis will appear here.
+              </p>
+            </div>
+          </section>
+
+          <section class="glass rounded-2xl p-5">
+            <h2 class="font-semibold text-white">
+              Quick Guide
+            </h2>
+
+            <div class="mt-4 space-y-3 text-sm text-slate-400">
+              <div class="flex gap-3">
+                <span>1️⃣</span>
+                <span>Start the camera or upload an image.</span>
+              </div>
+
+              <div class="flex gap-3">
+                <span>2️⃣</span>
+                <span>Take a snapshot if using the camera.</span>
+              </div>
+
+              <div class="flex gap-3">
+                <span>3️⃣</span>
+                <span>Write an AI analysis prompt.</span>
+              </div>
+
+              <div class="flex gap-3">
+                <span>4️⃣</span>
+                <span>Click Analyze with AI.</span>
+              </div>
+            </div>
+          </section>
+        </aside>
+      </div>
+    </div>
+  </main>
+
+  <!-- API Key Modal -->
+  <div
+    id="api-modal"
+    class="fixed inset-0 z-50 hidden items-center justify-center bg-black/70 p-4"
+  >
+    <div class="glass w-full max-w-lg rounded-2xl p-6">
+      <div class="flex items-start justify-between gap-4">
+        <div>
+          <h2 class="text-xl font-bold text-white">
+            Gemini API Key
+          </h2>
+
+          <p class="mt-1 text-sm text-slate-400">
+            Enter your Gemini API key to enable AI image analysis.
+          </p>
+        </div>
+
+        <button
+          id="close-api-modal"
+          type="button"
+          class="text-2xl text-slate-400 hover:text-white"
+          aria-label="Close"
+        >
+          ×
+        </button>
+      </div>
+
+      <label
+        for="api-key-input"
+        class="mt-6 block text-sm font-medium text-slate-300"
+      >
+        API Key
+      </label>
+
+      <input
+        id="api-key-input"
+        type="password"
+        autocomplete="off"
+        spellcheck="false"
+        class="mt-2 w-full rounded-xl border border-slate-700 bg-slate-950 px-4 py-3 text-sm text-white outline-none focus:border-cyan-500"
+        placeholder="AIza..."
+      />
+
+      <div
+        class="mt-4 rounded-xl border border-amber-500/20 bg-amber-500/10 p-3 text-xs leading-5 text-amber-200/80"
+      >
+        <strong>Important:</strong>
+        A browser-based app cannot securely protect an API key.
+        Do not publish this version with your personal API key embedded in the
+        source code. For a public deployment, use a server-side proxy.
+      </div>
+
+      <div class="mt-5 flex justify-end gap-2">
+        <button
+          id="cancel-api-key"
+          type="button"
+          class="rounded-lg border border-slate-700 bg-slate-900 px-4 py-2.5 text-slate-200 hover:bg-slate-800"
+        >
+          Cancel
+        </button>
+
+        <button
+          id="save-api-key"
+          type="button"
+          class="rounded-lg bg-cyan-500 px-4 py-2.5 font-semibold text-slate-950 hover:bg-cyan-400"
+        >
+          Save Key
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    (() => {
+      "use strict";
+
+      // ============================================================
+      // CONFIGURATION
+      // ============================================================
+
+      const CONFIG = {
+        // Change this if your available Gemini model is different.
+        GEMINI_MODEL: "gemini-3-flash-preview",
+
+        GEMINI_API_URL:
+          "https://generativelanguage.googleapis.com/v1beta/models/",
+
+        API_KEY_STORAGE:
+          "vibesight_gemini_api_key"
+      };
+
+      // ============================================================
+      // DOM
+      // ============================================================
+
+      const video = document.getElementById("webcam-view");
+      const imagePreview = document.getElementById("image-preview");
+      const imageUpload = document.getElementById("image-upload");
+
+      const cameraPlaceholder =
+        document.getElementById("camera-placeholder");
+
+      const startCameraButton =
+        document.getElementById("start-camera");
+
+      const stopCameraButton =
+        document.getElementById("stop-camera");
+
+      const snapshotButton =
+        document.getElementById("snapshot-button");
+
+      const recordButton =
+        document.getElementById("record-button");
+
+      const cameraError =
+        document.getElementById("camera-error");
+
+      const cameraErrorTitle =
+        document.getElementById("camera-error-title");
+
+      const cameraErrorMessage =
+        document.getElementById("camera-error-message");
+
+      const browserWarning =
+        document.getElementById("browser-warning");
+
+      const browserWarningText =
+        document.getElementById("browser-warning-text");
+
+      const cameraStatusDot =
+        document.getElementById("camera-status-dot");
+
+      const cameraStatusText =
+        document.getElementById("camera-status-text");
+
+      const recordingIndicator =
+        document.getElementById("recording-indicator");
+
+      const recordingOverlay =
+        document.getElementById("recording-overlay");
+
+      const recordingTime =
+        document.getElementById("recording-time");
+
+      const promptInput =
+        document.getElementById("prompt-input");
+
+      const analyzeButton =
+        document.getElementById("analyze-button");
+
+      const aiResult =
+        document.getElementById("ai-result");
+
+      const clearResultButton =
+        document.getElementById("clear-result");
+
+      const apiStatus =
+        document.getElementById("api-status");
+
+      const apiModal =
+        document.getElementById("api-modal");
+
+      const apiKeyInput =
+        document.getElementById("api-key-input");
+
+      const apiKeyButton =
+        document.getElementById("api-key-button");
+
+      const closeApiModal =
+        document.getElementById("close-api-modal");
+
+      const cancelApiKey =
+        document.getElementById("cancel-api-key");
+
+      const saveApiKey =
+        document.getElementById("save-api-key");
+
+      // ============================================================
+      // STATE
+      // ============================================================
+
+      let cameraStream = null;
+      let currentImageData = null;
+
+      let mediaRecorder = null;
+      let recordedChunks = [];
+
+      let recordingStartedAt = 0;
+      let recordingTimer = null;
+
+      // ============================================================
+      // INITIALIZATION
+      // ============================================================
+
+      function initialize() {
+        checkBrowserEnvironment();
+        updateApiStatus();
+        updateCameraControls();
+        bindEvents();
+      }
+
+      // ============================================================
+      // EVENT LISTENERS
+      // ============================================================
+
+      function bindEvents() {
+        startCameraButton.addEventListener(
+          "click",
+          startCamera
+        );
+
+        stopCameraButton.addEventListener(
+          "click",
+          stopCamera
+        );
+
+        snapshotButton.addEventListener(
+          "click",
+          takeSnapshot
+        );
+
+        recordButton.addEventListener(
+          "click",
+          toggleRecording
+        );
+
+        imageUpload.addEventListener(
+          "change",
+          handleImageUpload
+        );
+
+        analyzeButton.addEventListener(
+          "click",
+          analyzeCurrentImage
+        );
+
+        clearResultButton.addEventListener(
+          "click",
+          clearResult
+        );
+
+        apiKeyButton.addEventListener(
+          "click",
+          openApiModal
+        );
+
+        closeApiModal.addEventListener(
+          "click",
+          closeApiKeyModal
+        );
+
+        cancelApiKey.addEventListener(
+          "click",
+          closeApiKeyModal
+        );
+
+        saveApiKey.addEventListener(
+          "click",
+          saveApiKeyValue
+        );
+
+        apiModal.addEventListener(
+          "click",
+          (event) => {
+            if (event.target === apiModal) {
+              closeApiKeyModal();
+            }
+          }
+        );
+
+        window.addEventListener(
+          "beforeunload",
+          cleanup
+        );
+      }
+
+      // ============================================================
+      // BROWSER / CAMERA ENVIRONMENT
+      // ============================================================
+
+      function checkBrowserEnvironment() {
+        const secure =
+          window.isSecureContext === true;
+
+        const hasMediaDevices =
+          !!navigator.mediaDevices;
+
+        const hasGetUserMedia =
+          !!navigator.mediaDevices?.getUserMedia;
+
+        if (!secure || !hasMediaDevices || !hasGetUserMedia) {
+          browserWarning.classList.remove("hidden");
+
+          if (location.protocol === "file:") {
+            browserWarningText.textContent =
+              "This HTML file appears to be opened directly with file://. " +
+              "For camera access on Mac, run it from localhost or HTTPS.";
+          } else if (!secure) {
+            browserWarningText.textContent =
+              "This page is not running in a secure browser context. " +
+              "Camera access normally requires HTTPS or localhost.";
+          } else {
+            browserWarningText.textContent =
+              "This browser does not appear to provide camera access through getUserMedia.";
+          }
+        }
+      }
+
+      // ============================================================
+      // CAMERA
+      // ============================================================
+
+      async function startCamera() {
+        clearCameraError();
+
+        if (!navigator.mediaDevices?.getUserMedia) {
+          showCameraError(
+            "Camera API unavailable",
+            "Your browser does not provide navigator.mediaDevices.getUserMedia()."
+          );
+
+          return;
+        }
+
+        if (cameraStream) {
+          stopCamera();
+        }
+
+        // Remove uploaded image when starting the camera.
+        currentImageData = null;
+
+        imagePreview.src = "";
+        imagePreview.classList.add("hidden");
+
+        video.classList.remove("hidden");
+
+        try {
+          setCameraStatus(
+            "requesting",
+            "Requesting camera..."
+          );
+
+          /*
+           * Start simple.
+           *
+           * Avoid forcing 1280x720 because some Mac cameras,
+           * external webcams, and browser preview environments
+           * can reject overly specific constraints.
+           */
+          const constraints = {
+            video: true,
+            audio: false
+          };
+
+          cameraStream =
+            await navigator.mediaDevices.getUserMedia(
+              constraints
+            );
+
+          video.srcObject = cameraStream;
+
+          /*
+           * Some browsers require play() to be called explicitly
+           * even though autoplay + playsinline are present.
+           */
+          try {
+            await video.play();
+          } catch (playError) {
+            console.warn(
+              "Video play() warning:",
+              playError
+            );
+          }
+
+          cameraPlaceholder.classList.add("hidden");
+
+          setCameraStatus(
+            "active",
+            "Camera active"
+          );
+
+          updateCameraControls();
+
+        } catch (error) {
+          console.error(
+            "Camera access error:",
+            error
+          );
+
+          cameraStream = null;
+
+          setCameraStatus(
+            "error",
+            "Camera unavailable"
+          );
+
+          handleCameraError(error);
+
+          updateCameraControls();
+        }
+      }
+
+      function stopCamera() {
+        if (cameraStream) {
+          cameraStream
+            .getTracks()
+            .forEach((track) => {
+              track.stop();
+            });
+        }
+
+        cameraStream = null;
+
+        video.pause();
+        video.srcObject = null;
+
+        if (!currentImageData) {
+          cameraPlaceholder.classList.remove("hidden");
+        }
+
+        setCameraStatus(
+          "inactive",
+          "Camera stopped"
+        );
+
+        updateCameraControls();
+      }
+
+      function handleCameraError(error) {
+        let title =
+          "Unable to access camera";
+
+        let message =
+          "The browser could not start the camera.";
+
+        switch (error?.name) {
+          case "NotAllowedError":
+          case "PermissionDeniedError":
+            title =
+              "Camera permission denied";
+
+            message =
+              "Allow camera access for this website in your browser and macOS.";
+            break;
+
+          case "NotFoundError":
+          case "DevicesNotFoundError":
+            title =
+              "No camera found";
+
+            message =
+              "No available camera was detected.";
+            break;
+
+          case "NotReadableError":
+          case "TrackStartError":
+            title =
+              "Camera is already in use";
+
+            message =
+              "Another application may already be using the camera. " +
+              "Close Zoom, Teams, FaceTime, Photo Booth, OBS, or another camera app.";
+            break;
+
+          case "OverconstrainedError":
+            title =
+              "Camera settings unavailable";
+
+            message =
+              "The requested camera configuration is not supported. " +
+              "The app uses simple camera settings, so try refreshing the page.";
+            break;
+
+          case "SecurityError":
+            title =
+              "Camera blocked by browser security";
+
+            message =
+              "Camera access is blocked by the browser security context. " +
+              "Use HTTPS or localhost.";
+            break;
+
+          case "AbortError":
+            title =
+              "Camera startup interrupted";
+
+            message =
+              "The browser interrupted the camera request. Try again.";
+            break;
+
+          default:
+            message =
+              error?.message ||
+              "An unknown camera error occurred.";
+        }
+
+        showCameraError(
+          title,
+          message
+        );
+      }
+
+      // ============================================================
+      // SNAPSHOT
+      // ============================================================
+
+      function takeSnapshot() {
+        if (!cameraStream) {
+          return;
+        }
+
+        if (
+          video.videoWidth <= 0 ||
+          video.videoHeight <= 0
+        ) {
+          showCameraError(
+            "Camera not ready",
+            "Wait for the camera image to appear and try again."
+          );
+
+          return;
+        }
+
+        const canvas =
+          document.createElement("canvas");
+
+        canvas.width =
+          video.videoWidth;
+
+        canvas.height =
+          video.videoHeight;
+
+        const context =
+          canvas.getContext("2d");
+
+        if (!context) {
+          showCameraError(
+            "Snapshot failed",
+            "Your browser could not create an image canvas."
+          );
+
+          return;
+        }
+
+        context.drawImage(
+          video,
+          0,
+          0,
+          canvas.width,
+          canvas.height
+        );
+
+        currentImageData =
+          canvas.toDataURL(
+            "image/jpeg",
+            0.9
+          );
+
+        imagePreview.src =
+          currentImageData;
+
+        imagePreview.classList.remove(
+          "hidden"
+        );
+
+        video.classList.add(
+          "hidden"
+        );
+
+        cameraPlaceholder.classList.add(
+          "hidden"
+        );
+
+        updateCameraControls();
+      }
+
+      // ============================================================
+      // IMAGE UPLOAD
+      // ============================================================
+
+      function handleImageUpload(event) {
+        const file =
+          event.target.files?.[0];
+
+        if (!file) {
+          return;
+        }
+
+        if (!file.type.startsWith("image/")) {
+          showCameraError(
+            "Invalid file",
+            "Please select an image file."
+          );
+
+          imageUpload.value = "";
+          return;
+        }
+
+        const reader =
+          new FileReader();
+
+        reader.onload = () => {
+          currentImageData =
+            String(reader.result);
+
+          imagePreview.src =
+            currentImageData;
+
+          imagePreview.classList.remove(
+            "hidden"
+          );
+
+          video.classList.add(
+            "hidden"
+          );
+
+          cameraPlaceholder.classList.add(
+            "hidden"
+          );
+
+          clearCameraError();
+          updateCameraControls();
+        };
+
+        reader.onerror = () => {
+          showCameraError(
+            "Upload failed",
+            "The selected image could not be read."
+          );
+        };
+
+        reader.readAsDataURL(file);
+      }
+
+      // ============================================================
+      // RECORDING
+      // ============================================================
+
+      function toggleRecording() {
+        if (
+          mediaRecorder &&
+          mediaRecorder.state === "recording"
+        ) {
+          stopRecording();
+        } else {
+          startRecording();
+        }
+      }
+
+      function getSupportedRecordingMimeType() {
+        if (
+          typeof MediaRecorder === "undefined"
+        ) {
+          return null;
+        }
+
+        const types = [
+          "video/webm;codecs=vp9,opus",
+          "video/webm;codecs=vp8,opus",
+          "video/webm",
+          "video/mp4"
+        ];
+
+        for (const type of types) {
+          if (
+            typeof MediaRecorder.isTypeSupported ===
+              "function" &&
+            MediaRecorder.isTypeSupported(type)
+          ) {
+            return type;
+          }
+        }
+
+        return "";
+      }
+
+      function startRecording() {
+        if (!cameraStream) {
+          return;
+        }
+
+        if (
+          typeof MediaRecorder ===
+          "undefined"
+        ) {
+          showCameraError(
+            "Recording unavailable",
+            "MediaRecorder is not supported by this browser."
+          );
+
+          return;
+        }
+
+        const mimeType =
+          getSupportedRecordingMimeType();
+
+        recordedChunks = [];
+
+        try {
+          mediaRecorder =
+            mimeType
+              ? new MediaRecorder(
+                  cameraStream,
+                  { mimeType }
+                )
+              : new MediaRecorder(
+                  cameraStream
+                );
+
+        } catch (error) {
+          console.error(error);
+
+          showCameraError(
+            "Recording unavailable",
+            "The browser could not create a video recorder."
+          );
+
+          return;
+        }
+
+        mediaRecorder.ondataavailable =
+          (event) => {
+            if (
+              event.data &&
+              event.data.size > 0
+            ) {
+              recordedChunks.push(
+                event.data
+              );
+            }
+          };
+
+        mediaRecorder.onstop =
+          saveRecording;
+
+        mediaRecorder.onerror =
+          (event) => {
+            console.error(
+              "MediaRecorder error:",
+              event
+            );
+
+            showCameraError(
+              "Recording error",
+              "The browser encountered a recording error."
+            );
+          };
+
+        mediaRecorder.start(250);
+
+        recordingStartedAt =
+          Date.now();
+
+        recordingIndicator.classList.remove(
+          "hidden"
+        );
+
+        recordingIndicator.classList.add(
+          "flex"
+        );
+
+        recordingOverlay.classList.remove(
+          "hidden"
+        );
+
+        recordingOverlay.classList.add(
+          "flex"
+        );
+
+        recordButton.textContent =
+          "⏹ Stop Recording";
+
+        updateRecordingTimer();
+      }
+
+      function stopRecording() {
+        if (
+          !mediaRecorder ||
+          mediaRecorder.state !== "recording"
+        ) {
+          return;
+        }
+
+        mediaRecorder.stop();
+
+        clearInterval(
+          recordingTimer
+        );
+
+        recordingTimer = null;
+
+        recordingIndicator.classList.add(
+          "hidden"
+        );
+
+        recordingOverlay.classList.add(
+          "hidden"
+        );
+
+        recordButton.textContent =
+          "⏺ Record";
+      }
+
+      function updateRecordingTimer() {
+        clearInterval(
+          recordingTimer
+        );
+
+        recordingTimer =
+          setInterval(() => {
+            const elapsed =
+              Math.floor(
+                (Date.now() -
+                  recordingStartedAt) /
+                  1000
+              );
+
+            const minutes =
+              Math.floor(
+                elapsed / 60
+              )
+                .toString()
+                .padStart(2, "0");
+
+            const seconds =
+              (elapsed % 60)
+                .toString()
+                .padStart(2, "0");
+
+            recordingTime.textContent =
+              `${minutes}:${seconds}`;
+          }, 250);
+      }
+
+      function saveRecording() {
+        if (
+          recordedChunks.length === 0
+        ) {
+          return;
+        }
+
+        const mimeType =
+          mediaRecorder?.mimeType ||
+          "video/webm";
+
+        const blob =
+          new Blob(
+            recordedChunks,
+            { type: mimeType }
+          );
+
+        const extension =
+          mimeType.includes("mp4")
+            ? "mp4"
+            : "webm";
+
+        const url =
+          URL.createObjectURL(blob);
+
+        const link =
+          document.createElement("a");
+
+        link.href = url;
+
+        link.download =
+          `vibesight-recording-${Date.now()}.${extension}`;
+
+        document.body.appendChild(link);
+
+        link.click();
+
+        link.remove();
+
+        setTimeout(() => {
+          URL.revokeObjectURL(url);
+        }, 1000);
+
+        recordedChunks = [];
+      }
+
+      // ============================================================
+      // GEMINI API
+      // ============================================================
+
+      function getApiKey() {
+        try {
+          return (
+            localStorage.getItem(
+              CONFIG.API_KEY_STORAGE
+            ) || ""
+          ).trim();
+        } catch (error) {
+          console.warn(
+            "localStorage unavailable:",
+            error
+          );
+
+          return "";
+        }
+      }
+
+      function saveApiKeyValue() {
+        const key =
+          apiKeyInput.value.trim();
+
+        if (!key) {
+          apiKeyInput.focus();
+          return;
+        }
+
+        try {
+          localStorage.setItem(
+            CONFIG.API_KEY_STORAGE,
+            key
+          );
+        } catch (error) {
+          console.error(error);
+
+          showAIResult(
+            "Unable to save the API key in this browser."
+          );
+
+          return;
+        }
+
+        closeApiKeyModal();
+        updateApiStatus();
+        updateCameraControls();
+      }
+
+      async function analyzeCurrentImage() {
+        clearCameraError();
+
+        const apiKey =
+          getApiKey();
+
+        if (!apiKey) {
+          openApiModal();
+          return;
+        }
+
+        if (!currentImageData) {
+          showAIResult(
+            "Please start the camera and take a snapshot, or upload an image first."
+          );
+
+          return;
+        }
+
+        const prompt =
+          promptInput.value.trim();
+
+        if (!prompt) {
+          showAIResult(
+            "Please enter an analysis prompt."
+          );
+
+          promptInput.focus();
+          return;
+        }
+
+        analyzeButton.disabled = true;
+        analyzeButton.textContent =
+          "⏳ Analyzing...";
+
+        showAIResult(
+          "AI is analyzing the image..."
+        );
+
+        try {
+          const imagePayload =
+            dataUrlToGeminiPart(
+              currentImageData
+            );
+
+          const requestBody = {
+            contents: [
+              {
+                role: "user",
+                parts: [
+                  {
+                    text: prompt
+                  },
+                  imagePayload
+                ]
+              }
+            ],
+            generationConfig: {
+              temperature: 0.4,
+              maxOutputTokens: 2048
+            }
+          };
+
+          const endpoint =
+            `${CONFIG.GEMINI_API_URL}${encodeURIComponent(
+              CONFIG.GEMINI_MODEL
+            )}:generateContent?key=${encodeURIComponent(
+              apiKey
+            )}`;
+
+          const response =
+            await fetch(
+              endpoint,
+              {
+                method: "POST",
+
+                headers: {
+                  "Content-Type":
+                    "application/json"
+                },
+
+                body: JSON.stringify(
+                  requestBody
+                )
+              }
+            );
+
+          const responseText =
+            await response.text();
+
+          let data = null;
+
+          try {
+            data =
+              JSON.parse(
+                responseText
+              );
+          } catch {
+            data = null;
+          }
+
+          if (!response.ok) {
+            const apiMessage =
+              data?.error?.message ||
+              responseText ||
+              `HTTP ${response.status}`;
+
+            throw new Error(
+              apiMessage
+            );
+          }
+
+          const text =
+            extractGeminiText(
+              data
+            );
+
+          if (!text) {
+            throw new Error(
+              "Gemini returned an empty response."
+            );
+          }
+
+          showAIResult(text);
+
+        } catch (error) {
+          console.error(
+            "Gemini API error:",
+            error
+          );
+
+          showAIResult(
+            `### AI Analysis Error\n\n${escapeMarkdown(
+              error.message ||
+                "Something went wrong while contacting Gemini."
+            )}`
+          );
+
+        } finally {
+          analyzeButton.disabled = false;
+
+          analyzeButton.textContent =
+            "✨ Analyze with AI";
+
+          updateCameraControls();
+        }
+      }
+
+      function dataUrlToGeminiPart(
+        dataUrl
+      ) {
+        const match =
+          dataUrl.match(
+            /^data:(image\/[a-zA-Z0-9.+-]+);base64,(.+)$/
+          );
+
+        if (!match) {
+          throw new Error(
+            "Invalid image data."
+          );
+        }
+
+        return {
+          inlineData: {
+            mimeType: match[1],
+            data: match[2]
+          }
+        };
+      }
+
+      function extractGeminiText(
+        data
+      ) {
+        const candidates =
+          data?.candidates || [];
+
+        return candidates
+          .flatMap(
+            (candidate) =>
+              candidate?.content?.parts || []
+          )
+          .map(
+            (part) =>
+              part?.text || ""
+          )
+          .join("\n")
+          .trim();
+      }
+
+      // ============================================================
+      // UI
+      // ============================================================
+
+      function updateApiStatus() {
+        const hasKey =
+          !!getApiKey();
+
+        if (hasKey) {
+          apiStatus.textContent =
+            "API key saved";
+
+          apiStatus.className =
+            "rounded-full bg-emerald-500/10 px-2.5 py-1 text-xs text-emerald-300";
+        } else {
+          apiStatus.textContent =
+            "No API key";
+
+          apiStatus.className =
+            "rounded-full bg-slate-800 px-2.5 py-1 text-xs text-slate-400";
+        }
+      }
+
+      function updateCameraControls() {
+        const hasCamera =
+          !!cameraStream;
+
+        const hasImage =
+          !!currentImageData;
+
+        stopCameraButton.disabled =
+          !hasCamera;
+
+        snapshotButton.disabled =
+          !hasCamera;
+
+        recordButton.disabled =
+          !hasCamera;
+
+        analyzeButton.disabled =
+          !hasImage ||
+          !getApiKey();
+      }
+
+      function setCameraStatus(
+        state,
+        text
+      ) {
+        cameraStatusText.textContent =
+          text;
+
+        const classes = {
+          active:
+            "status-dot bg-emerald-400",
+          requesting:
+            "status-dot bg-amber-400",
+          error:
+            "status-dot bg-red-400",
+          inactive:
+            "status-dot bg-slate-500"
+        };
+
+        cameraStatusDot.className =
+          classes[state] ||
+          classes.inactive;
+      }
+
+      function showCameraError(
+        title,
+        message
+      ) {
+        cameraErrorTitle.textContent =
+          title;
+
+        cameraErrorMessage.textContent =
+          message;
+
+        cameraError.classList.remove(
+          "hidden"
+        );
+      }
+
+      function clearCameraError() {
+        cameraError.classList.add(
+          "hidden"
+        );
+      }
+
+      function showAIResult(
+        markdown
+      ) {
+        if (
+          typeof marked !==
+          "undefined"
+        ) {
+          aiResult.innerHTML =
+            marked.parse(
+              markdown
+            );
+        } else {
+          aiResult.textContent =
+            markdown;
+        }
+      }
+
+      function clearResult() {
+        aiResult.innerHTML =
+          '<p class="text-slate-500">AI analysis will appear here.</p>';
+      }
+
+      // ============================================================
+      // API KEY MODAL
+      // ============================================================
+
+      function openApiModal() {
+        apiModal.classList.remove(
+          "hidden"
+        );
+
+        apiModal.classList.add(
+          "flex"
+        );
+
+        apiKeyInput.value =
+          getApiKey();
+
+        setTimeout(() => {
+          apiKeyInput.focus();
+        }, 50);
+      }
+
+      function closeApiKeyModal() {
+        apiModal.classList.add(
+          "hidden"
+        );
+
+        apiModal.classList.remove(
+          "flex"
+        );
+      }
+
+      // ============================================================
+      // SECURITY
+      // ============================================================
+
+      function escapeMarkdown(
+        value
+      ) {
+        return String(value)
+          .replace(
+            /\\/g,
+            "\\\\"
+          )
+          .replace(
+            /([`*_{}\[\]()#+.!|>])/g,
+            "\\$1"
+          );
+      }
+
+      // ============================================================
+      // CLEANUP
+      // ============================================================
+
+      function cleanup() {
+        clearInterval(
+          recordingTimer
+        );
+
+        recordingTimer = null;
+
+        if (
+          mediaRecorder &&
+          mediaRecorder.state ===
+            "recording"
+        ) {
+          try {
+            mediaRecorder.stop();
+          } catch {}
+        }
+
+        if (cameraStream) {
+          cameraStream
+            .getTracks()
+            .forEach(
+              (track) =>
+                track.stop()
+            );
+        }
+
+        cameraStream = null;
+      }
+
+      // ============================================================
+      // START
+      // ============================================================
+
+      initialize();
+    })();
+  </script>
+</body>
+</html>
